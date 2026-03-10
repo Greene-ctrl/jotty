@@ -28,23 +28,32 @@ export const getCurrentUser = async (
     if (authToken && expectedToken && authToken === expectedToken) {
       const allUsers = await readJsonFile(USERS_FILE);
       if (allUsers && Array.isArray(allUsers)) {
-        // Return the super admin or the first admin found
         const adminUser = allUsers.find((u: any) => u.isSuperAdmin) || allUsers.find((u: any) => u.isAdmin);
         if (adminUser) return adminUser;
       }
     }
-  } catch (e) {
-    // Headers might not be available in all contexts
-  }
+  } catch (e) {}
 
   // 2. Check for traditional session
   const sessionId = await getSessionId();
   const sessions = await readSessions();
   const currentUsername = sessions[sessionId || ""];
 
-  if (!currentUsername && !username) return null;
+  if (currentUsername) {
+    const user = await getUserByUsername(currentUsername);
+    if (user) return user;
+  }
 
-  return (await getUserByUsername(currentUsername || username || "")) || null;
+  // 3. AUTO-LOGIN: If no token or session, return the first admin found
+  // This effectively removes the login requirement
+  const allUsers = await readJsonFile(USERS_FILE);
+  if (allUsers && Array.isArray(allUsers) && allUsers.length > 0) {
+    return allUsers.find((u: any) => u.isSuperAdmin) ||
+           allUsers.find((u: any) => u.isAdmin) ||
+           allUsers[0];
+  }
+
+  return null;
 };
 
 export const hasUsers = async (): Promise<boolean> => {

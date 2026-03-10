@@ -32,18 +32,18 @@ describe("Security: Route Guards", () => {
   });
 
   describe("redirectGuards", () => {
-    it("should redirect unauthenticated users to login", async () => {
+    it("should NOT redirect unauthenticated users to login (Login interface removed)", async () => {
       mockGetCurrentUser.mockResolvedValue(null);
       mockHeaders.mockImplementation((name: string) => {
         if (name === "x-pathname") return "/dashboard";
         return null;
       });
 
-      await expect(redirectGuards()).rejects.toThrow("REDIRECT:/auth/login");
-      expect(mockRedirect).toHaveBeenCalledWith("/auth/login");
+      await expect(redirectGuards()).resolves.not.toThrow();
+      expect(mockRedirect).not.toHaveBeenCalled();
     });
 
-    it("should not redirect for /auth paths", async () => {
+    it("should not redirect for /auth paths if no user", async () => {
       mockGetCurrentUser.mockResolvedValue(null);
       mockHeaders.mockImplementation((name: string) => {
         if (name === "x-pathname") return "/auth/login";
@@ -114,11 +114,11 @@ describe("Security: Route Guards", () => {
       await expect(redirectGuards()).resolves.not.toThrow();
     });
 
-    it("should handle missing pathname header by redirecting unauthenticated users", async () => {
+    it("should handle missing pathname header by not redirecting", async () => {
       mockGetCurrentUser.mockResolvedValue(null);
       mockHeaders.mockReturnValue(null);
 
-      await expect(redirectGuards()).rejects.toThrow("REDIRECT:/auth/login");
+      await expect(redirectGuards()).resolves.not.toThrow();
     });
   });
 });
