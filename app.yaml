@@ -1,0 +1,7 @@
+sdk: docker
+python_version: "3.11"
+
+resources:
+  cpu: 2
+  memory: 4G
+  gpu: null

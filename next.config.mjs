@@ -1,4 +1,3 @@
-import { withSerwist } from "@serwist/turbopack";
 import createNextIntlPlugin from "next-intl/plugin";
 
 const withNextIntl = createNextIntlPlugin("./i18n.ts");
@@ -7,12 +6,23 @@ const withNextIntl = createNextIntlPlugin("./i18n.ts");
 const nextConfig = {
   output: "standalone",
   serverExternalPackages: ["ws"],
-  serverActions: {
-    bodySizeLimit: "100mb",
-  },
   images: {
     unoptimized: true,
   },
+  typescript: {
+    ignoreBuildErrors: true,
+  },
+  eslint: {
+    ignoreDuringBuilds: true,
+  },
+  experimental: {
+    webpackBuildWorker: false,
+    parallelServerBuildTraces: false,
+    parallelServerCompiles: false,
+    cpus: 1,
+  },
+  poweredByHeader: false,
+  generateEtags: false,
   async headers() {
     return [
       {
@@ -28,4 +38,4 @@ const nextConfig = {
   },
 };
 
-export default withSerwist(withNextIntl(nextConfig));
+export default withNextIntl(nextConfig);

@@ -1,3 +1,13 @@
+---
+title: Obsidian Scribe Pro
+emoji: ✍️
+colorFrom: blue
+colorTo: green
+sdk: docker
+app_port: 3000
+storage: small
+pinned: false
+---
 <p align="center">
   <img src="public/app-icons/logos/logo-animated.svg" alt="Jotty Logo" width="100"> 
   <br />

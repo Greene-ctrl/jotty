@@ -5,8 +5,9 @@ import { isEnvEnabled, isDebugFlag } from "./app/_utils/env-utils";
 const debugProxy = isDebugFlag("proxy");
 
 export const proxy = async (request: NextRequest) => {
-  const { pathname } = request.nextUrl;
+  const { pathname, searchParams } = request.nextUrl;
 
+  // Allow public assets and auth paths (though we might remove auth later)
   if (
     pathname.startsWith("/api/auth/check-session") ||
     pathname.startsWith("/api/auth/login") ||
@@ -18,10 +19,19 @@ export const proxy = async (request: NextRequest) => {
     return response;
   }
 
-  if (pathname.startsWith("/api/")) {
-    return NextResponse.next();
+  // Token-based authentication check
+  const authToken = request.headers.get("x-auth-token") || searchParams.get("token");
+  const expectedToken = process.env.APP_AUTH_TOKEN;
+  const isTokenValid = authToken && expectedToken && authToken === expectedToken;
+
+  if (isTokenValid) {
+    const response = NextResponse.next();
+    response.headers.set("x-pathname", pathname);
+    response.headers.set("x-auth-token", authToken);
+    return response;
   }
 
+  // Fallback to session-based authentication
   const cookieName =
     process.env.NODE_ENV === "production" && isEnvEnabled(process.env.HTTPS)
       ? "__Host-session"
@@ -38,9 +48,11 @@ export const proxy = async (request: NextRequest) => {
   const appUrlBase = process.env.APP_URL
     ? process.env.APP_URL.replace(/\/$/, "")
     : request.nextUrl.origin;
-  const loginUrl = new URL(`${appUrlBase}/auth/login`);
 
+  // If no session and no valid token, redirect to login for now
+  // (We can change this to 401 if we want to fully "remove" login UI)
   if (!sessionId) {
+    const loginUrl = new URL(`${appUrlBase}/auth/login`);
     return NextResponse.redirect(loginUrl);
   }
 
@@ -48,24 +60,9 @@ export const proxy = async (request: NextRequest) => {
     const internalApiUrl =
       process.env.INTERNAL_API_URL ||
       (process.env.APP_URL ? new URL(process.env.APP_URL).origin : null) ||
-      request.nextUrl.origin;
-
-    if (debugProxy) {
-      console.log("MIDDLEWARE - URL Resolution:");
-      console.log(
-        "  INTERNAL_API_URL:",
-        process.env.INTERNAL_API_URL || "(not set)",
-      );
-      console.log("  APP_URL:", process.env.APP_URL || "(not set)");
-      console.log("  request.nextUrl.origin:", request.nextUrl.origin);
-      console.log("  → Using:", internalApiUrl);
-    }
+      "http://localhost:3000"; // Default to localhost for HF internal calls
 
     const sessionCheckUrl = new URL(`${internalApiUrl}/api/auth/check-session`);
-
-    if (debugProxy) {
-      console.log("MIDDLEWARE - Session Check URL:", sessionCheckUrl.href);
-    }
 
     const sessionCheck = await fetch(sessionCheckUrl, {
       headers: {
@@ -74,21 +71,10 @@ export const proxy = async (request: NextRequest) => {
       cache: "no-store",
     });
 
-    if (debugProxy) {
-      console.log("MIDDLEWARE - Session Check Response:");
-      console.log("  status:", sessionCheck.status);
-      console.log("  statusText:", sessionCheck.statusText);
-      console.log("  ok:", sessionCheck.ok);
-    }
-
     if (!sessionCheck.ok) {
+      const loginUrl = new URL(`${appUrlBase}/auth/login`);
       const redirectResponse = NextResponse.redirect(loginUrl);
       redirectResponse.cookies.delete(cookieName);
-
-      if (debugProxy) {
-        console.log("MIDDLEWARE - session is not ok");
-      }
-
       return redirectResponse;
     }
   } catch (error) {
