@@ -1,7 +1,7 @@
 "use server";
 
 import { USERS_FILE } from "@/app/_consts/files";
-import { readJsonFile, writeJsonFile } from "../file";
+import { readJsonFile, writeJsonFile } from "../file/json";
 import { Result, User } from "@/app/_types";
 import { logUserEvent, logAudit } from "@/app/_server/actions/log";
 import { getUserIndex } from "./helpers";
@@ -12,12 +12,15 @@ export const updateUserSettings = async (
 ): Promise<Result<{ user: User }>> => {
   try {
     const currentUser = await getCurrentUser();
+
+    // In auto-login mode, getCurrentUser always returns a user.
+    // We only fail if for some reason it's null (e.g. testing or catastrophic failure).
     if (!currentUser) {
       await logUserEvent("user_settings_updated", "unknown", false, { error: "Not authenticated" });
       return { success: false, error: "Not authenticated" };
     }
 
-    const allUsers = await readJsonFile(USERS_FILE);
+    const allUsers = (await readJsonFile(USERS_FILE)) || [];
     const userIndex = await getUserIndex(currentUser.username);
 
     const updates: Partial<User> = {};
@@ -25,6 +28,15 @@ export const updateUserSettings = async (
       if (value !== undefined) {
         (updates as any)[key] = value;
       }
+    }
+
+    if (userIndex === -1) {
+       return {
+         success: true,
+         data: {
+           user: { ...currentUser, ...updates }
+         }
+       };
     }
 
     const updatedUser: User = {

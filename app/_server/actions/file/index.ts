@@ -24,7 +24,10 @@ export const getEnvOrFile = async (
   const filePath = process.env[fileVar];
   if (filePath) {
     try {
-      return (await fs.readFile(filePath, "utf-8")).trim();
+      const fullPath = path.isAbsolute(filePath)
+        ? filePath
+        : path.join(process.cwd(), filePath);
+      return (await fs.readFile(fullPath, "utf-8")).trim();
     } catch (error) {
       console.error(`Failed to read ${fileVar} from ${filePath}:`, error);
       return "";
@@ -44,10 +47,16 @@ export const ensureCorDirsAndFiles = async (): Promise<{
 
   try {
     for (const dir of coreDirAndFiles.dirs) {
-      await ensureDir(path.join(process.cwd(), dir));
+      const fullDir = path.isAbsolute(dir)
+        ? dir
+        : path.join(process.cwd(), dir);
+      await ensureDir(fullDir);
     }
     for (const file of coreDirAndFiles.files) {
-      await ensureFile(path.join(process.cwd(), file));
+      const fullFile = path.isAbsolute(file)
+        ? file
+        : path.join(process.cwd(), file);
+      await ensureFile(fullFile);
     }
     return { success: true };
   } catch (error) {
@@ -58,27 +67,43 @@ export const ensureCorDirsAndFiles = async (): Promise<{
 
 export const ensureDir = async (dir: string) => {
   try {
-    await fs.access(dir);
+    const fullDir = path.isAbsolute(dir)
+      ? dir
+      : path.join(process.cwd(), dir);
+    await fs.access(fullDir);
   } catch {
-    await fs.mkdir(dir, { recursive: true });
+    const fullDir = path.isAbsolute(dir)
+      ? dir
+      : path.join(process.cwd(), dir);
+    await fs.mkdir(fullDir, { recursive: true });
   }
 };
 
 export const ensureFile = async (filePath: string) => {
   try {
-    await fs.access(filePath);
+    const fullFile = path.isAbsolute(filePath)
+      ? filePath
+      : path.join(process.cwd(), filePath);
+    await fs.access(fullFile);
   } catch {
-    await fs.writeFile(filePath, "", "utf-8");
+    const fullFile = path.isAbsolute(filePath)
+      ? filePath
+      : path.join(process.cwd(), filePath);
+    await fs.writeFile(fullFile, "", "utf-8");
   }
 };
 
 export const readJsonFile = async (filePath: string): Promise<any> => {
   try {
+    const fullPath = path.isAbsolute(filePath)
+      ? filePath
+      : path.join(process.cwd(), filePath);
     const content = await fs.readFile(
-      path.join(process.cwd(), filePath),
+      fullPath,
       "utf-8",
     );
-    return JSON.parse(content) || {};
+    if (!content.trim()) return null;
+    return JSON.parse(content);
   } catch (error) {
     return null;
   }
@@ -89,9 +114,12 @@ export const writeJsonFile = async (
   filePath: string,
 ): Promise<void> => {
   try {
-    await fs.mkdir(path.dirname(filePath), { recursive: true });
+    const fullPath = path.isAbsolute(filePath)
+      ? filePath
+      : path.join(process.cwd(), filePath);
+    await fs.mkdir(path.dirname(fullPath), { recursive: true });
     await fs.writeFile(
-      path.join(process.cwd(), filePath),
+      fullPath,
       JSON.stringify(data, null, 2),
       "utf-8",
     );
@@ -103,8 +131,11 @@ export const writeJsonFile = async (
 
 export const readFile = async (filePath: string): Promise<string> => {
   try {
+    const fullPath = path.isAbsolute(filePath)
+      ? filePath
+      : path.join(process.cwd(), filePath);
     const content = await fs.readFile(
-      path.join(process.cwd(), filePath),
+      fullPath,
       "utf-8",
     );
     return content || "";
@@ -120,13 +151,19 @@ export const getUserModeDir = async (
   username?: string,
 ): Promise<string> => {
   const base = await getCwd();
+
+  // Use absolute DATA_DIR if provided
+  const resolvedDataDir = path.isAbsolute(DATA_DIR)
+    ? DATA_DIR
+    : path.join(base, DATA_DIR);
+
   if (username) {
-    return path.join(base, DATA_DIR, mode, username);
+    return path.join(resolvedDataDir, mode, username);
   }
 
   const user = await getCurrentUser();
   if (!user) throw new Error("Not authenticated");
-  return path.join(base, DATA_DIR, mode, user.username || "");
+  return path.join(resolvedDataDir, mode, user.username || "");
 };
 
 /**

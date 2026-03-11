@@ -8,7 +8,7 @@ import { USERS_FILE } from "@/app/_consts/files";
 import { Modes } from "@/app/_types/enums";
 import { getCurrentUser } from "@/app/_server/actions/users";
 import { getUserModeDir, ensureDir } from "@/app/_server/actions/file";
-import { readJsonFile } from "@/app/_server/actions/file";
+import { readJsonFile } from "@/app/_server/actions/file/json";
 import { parseChecklistContent } from "@/app/_utils/client-parser-utils";
 import {
   extractChecklistType,
@@ -406,7 +406,7 @@ export const getAllLists = async (
   try {
     const allLists: Checklist[] = [];
 
-    const users: User[] = await readJsonFile(USERS_FILE);
+    const users: User[] = (await readJsonFile(USERS_FILE)) || [];
 
     for (const user of users) {
       const userDir = path.join(

@@ -7,7 +7,7 @@ import { NOTES_DIR } from "@/app/_consts/files";
 import { Modes } from "@/app/_types/enums";
 import { getCurrentUser, getUserByNote } from "@/app/_server/actions/users";
 import { getUserModeDir, ensureDir } from "@/app/_server/actions/file";
-import { readJsonFile } from "@/app/_server/actions/file";
+import { readJsonFile } from "@/app/_server/actions/file/json";
 import { USERS_FILE } from "@/app/_consts/files";
 import { parseNoteContent } from "@/app/_utils/client-parser-utils";
 import {
@@ -23,7 +23,7 @@ export const getAllNotes = async (allowArchived?: boolean) => {
   try {
     const allDocs: Note[] = [];
 
-    const users: User[] = await readJsonFile(USERS_FILE);
+    const users: User[] = (await readJsonFile(USERS_FILE)) || [];
 
     for (const user of users) {
       const userDir = NOTES_DIR(user.username);

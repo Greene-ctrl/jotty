@@ -1,7 +1,7 @@
 "use server";
 
 import { USERS_FILE, NOTES_DIR, CHECKLISTS_DIR } from "@/app/_consts/files";
-import { readJsonFile } from "../file";
+import { readJsonFile } from "../file/json";
 import { Result, ItemType, User } from "@/app/_types";
 import fs from "fs/promises";
 import path from "path";
@@ -14,44 +14,48 @@ export const findFileRecursively = async (
   targetFileName: string,
   targetCategory: string
 ): Promise<string | null> => {
-  const categoryParts = targetCategory.split("/");
-  const currentCategoryPart = categoryParts[0];
-  const remainingCategoryParts = categoryParts.slice(1);
+  try {
+    const categoryParts = targetCategory.split("/");
+    const currentCategoryPart = categoryParts[0];
+    const remainingCategoryParts = categoryParts.slice(1);
 
-  const entries = await fs.readdir(dir, { withFileTypes: true });
+    const entries = await fs.readdir(dir, { withFileTypes: true });
 
-  for (const entry of entries) {
-    if (entry.name.startsWith(".")) continue;
-    if (entry.isDirectory()) {
-      if (entry.name === currentCategoryPart) {
-        if (remainingCategoryParts.length === 0) {
-          const categoryPath = path.join(dir, entry.name);
-          const categoryEntries = await fs.readdir(categoryPath, {
-            withFileTypes: true,
-          });
+    for (const entry of entries) {
+      if (entry.name.startsWith(".")) continue;
+      if (entry.isDirectory()) {
+        if (entry.name === currentCategoryPart) {
+          if (remainingCategoryParts.length === 0) {
+            const categoryPath = path.join(dir, entry.name);
+            const categoryEntries = await fs.readdir(categoryPath, {
+              withFileTypes: true,
+            });
 
-          for (const fileEntry of categoryEntries) {
-            if (fileEntry.isFile() && fileEntry.name === targetFileName) {
-              return path.join(categoryPath, fileEntry.name);
+            for (const fileEntry of categoryEntries) {
+              if (fileEntry.isFile() && fileEntry.name === targetFileName) {
+                return path.join(categoryPath, fileEntry.name);
+              }
             }
+          } else {
+            const result = await findFileRecursively(
+              path.join(dir, entry.name),
+              targetFileName,
+              remainingCategoryParts.join("/")
+            );
+            if (result) return result;
           }
         } else {
           const result = await findFileRecursively(
             path.join(dir, entry.name),
             targetFileName,
-            remainingCategoryParts.join("/")
+            targetCategory
           );
           if (result) return result;
         }
-      } else {
-        const result = await findFileRecursively(
-          path.join(dir, entry.name),
-          targetFileName,
-          targetCategory
-        );
-        if (result) return result;
       }
     }
+  } catch (error) {
+    return null;
   }
 
   return null;
@@ -59,6 +63,7 @@ export const findFileRecursively = async (
 
 export const getUserIndex = async (username: string): Promise<number> => {
   const allUsers = await readJsonFile(USERS_FILE);
+  if (!allUsers || !Array.isArray(allUsers)) return -1;
   return allUsers.findIndex((user: User) => user.username === username);
 };
 
@@ -114,8 +119,19 @@ const findUuidInDirectory = async (
   dir: string,
   targetUuid: string
 ): Promise<boolean> => {
-  const { grepCheckUuidExists } = await import("@/app/_utils/grep-utils");
-  return grepCheckUuidExists(dir, targetUuid);
+  try {
+    const { exec } = await import("child_process");
+    const { promisify } = await import("util");
+    const execAsync = promisify(exec);
+
+    // Use a direct grep command for performance and reliability
+    const { stdout } = await execAsync(
+      `grep -rl "uuid: ${targetUuid}" "${dir}" --include="*.md" 2>/dev/null || true`
+    );
+    return stdout.trim().length > 0;
+  } catch (error) {
+    return false;
+  }
 };
 
 export const getUserByItemUuid = async (
@@ -123,7 +139,12 @@ export const getUserByItemUuid = async (
   itemType: ItemType
 ): Promise<Result<User>> => {
   try {
-    const users = await readJsonFile(USERS_FILE);
+    const users = (await readJsonFile(USERS_FILE)) || [];
+
+    // In auto-login mode, users might be empty
+    if (!Array.isArray(users) || users.length === 0) {
+       return { success: false, error: "No users found" };
+    }
 
     for (const user of users) {
       try {
