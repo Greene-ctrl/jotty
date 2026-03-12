@@ -2,7 +2,8 @@
 
 import path from "path";
 import { ItemType } from "@/app/_types/core";
-import { ensureDir, readJsonFile, writeJsonFile } from "@/app/_server/actions/file";
+import { ensureDir, writeJsonFile } from "@/app/_server/actions/file";
+import { readJsonFile } from "@/app/_server/actions/file/json";
 import { ItemTypes } from "@/app/_types/enums";
 import { getSharingFilePath } from "./helpers";
 import { SharingData } from "./types";

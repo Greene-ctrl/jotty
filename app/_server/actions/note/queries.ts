@@ -220,7 +220,7 @@ export const getUserNotes = async (options: GetNotesOptions = {}) => {
 
     const resolvedDir = path.isAbsolute(userDir)
       ? userDir
-      : path.join(process.cwd(), userDir);
+      : path.resolve(process.cwd(), userDir);
 
     const layoutTiming = metadataOnly;
     const t1 = layoutTiming ? performance.now() : 0;
@@ -281,7 +281,7 @@ export const getUserNotes = async (options: GetNotesOptions = {}) => {
 
         const sharerAbsDir = path.isAbsolute(sharerDir)
           ? sharerDir
-          : path.join(process.cwd(), sharerDir);
+          : path.resolve(process.cwd(), sharerDir);
         const sharerCacheKey = canCache
           ? metaCacheKey("notes", sharerAbsDir)
           : null;

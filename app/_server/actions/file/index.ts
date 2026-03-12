@@ -1,6 +1,6 @@
 "use server";
 
-import { getCurrentUser } from "@/app/_server/actions/users";
+import { getCurrentUser } from "@/app/_server/actions/users/queries";
 import {
   DATA_DIR,
   SESSION_DATA_FILE,
@@ -26,7 +26,7 @@ export const getEnvOrFile = async (
     try {
       const fullPath = path.isAbsolute(filePath)
         ? filePath
-        : path.join(process.cwd(), filePath);
+        : path.resolve(process.cwd(), filePath);
       return (await fs.readFile(fullPath, "utf-8")).trim();
     } catch (error) {
       console.error(`Failed to read ${fileVar} from ${filePath}:`, error);
@@ -47,16 +47,10 @@ export const ensureCorDirsAndFiles = async (): Promise<{
 
   try {
     for (const dir of coreDirAndFiles.dirs) {
-      const fullDir = path.isAbsolute(dir)
-        ? dir
-        : path.join(process.cwd(), dir);
-      await ensureDir(fullDir);
+      await ensureDir(dir);
     }
     for (const file of coreDirAndFiles.files) {
-      const fullFile = path.isAbsolute(file)
-        ? file
-        : path.join(process.cwd(), file);
-      await ensureFile(fullFile);
+      await ensureFile(file);
     }
     return { success: true };
   } catch (error) {
@@ -65,75 +59,23 @@ export const ensureCorDirsAndFiles = async (): Promise<{
   }
 };
 
-export const ensureDir = async (dir: string) => {
-  try {
-    const fullDir = path.isAbsolute(dir)
-      ? dir
-      : path.join(process.cwd(), dir);
-    await fs.access(fullDir);
-  } catch {
-    const fullDir = path.isAbsolute(dir)
-      ? dir
-      : path.join(process.cwd(), dir);
-    await fs.mkdir(fullDir, { recursive: true });
-  }
-};
+import {
+  readJsonFile as rJF,
+  writeJsonFile as wJF,
+  ensureDir as eD,
+  ensureFile as eF,
+} from "./json";
 
-export const ensureFile = async (filePath: string) => {
-  try {
-    const fullFile = path.isAbsolute(filePath)
-      ? filePath
-      : path.join(process.cwd(), filePath);
-    await fs.access(fullFile);
-  } catch {
-    const fullFile = path.isAbsolute(filePath)
-      ? filePath
-      : path.join(process.cwd(), filePath);
-    await fs.writeFile(fullFile, "", "utf-8");
-  }
-};
-
-export const readJsonFile = async (filePath: string): Promise<any> => {
-  try {
-    const fullPath = path.isAbsolute(filePath)
-      ? filePath
-      : path.join(process.cwd(), filePath);
-    const content = await fs.readFile(
-      fullPath,
-      "utf-8",
-    );
-    if (!content.trim()) return null;
-    return JSON.parse(content);
-  } catch (error) {
-    return null;
-  }
-};
-
-export const writeJsonFile = async (
-  data: any,
-  filePath: string,
-): Promise<void> => {
-  try {
-    const fullPath = path.isAbsolute(filePath)
-      ? filePath
-      : path.join(process.cwd(), filePath);
-    await fs.mkdir(path.dirname(fullPath), { recursive: true });
-    await fs.writeFile(
-      fullPath,
-      JSON.stringify(data, null, 2),
-      "utf-8",
-    );
-  } catch (error) {
-    console.error("Error writing data:", error);
-    throw error;
-  }
-};
+export const readJsonFile = rJF;
+export const writeJsonFile = wJF;
+export const ensureDir = eD;
+export const ensureFile = eF;
 
 export const readFile = async (filePath: string): Promise<string> => {
   try {
     const fullPath = path.isAbsolute(filePath)
       ? filePath
-      : path.join(process.cwd(), filePath);
+      : path.resolve(process.cwd(), filePath);
     const content = await fs.readFile(
       fullPath,
       "utf-8",
@@ -152,10 +94,9 @@ export const getUserModeDir = async (
 ): Promise<string> => {
   const base = await getCwd();
 
-  // Use absolute DATA_DIR if provided
   const resolvedDataDir = path.isAbsolute(DATA_DIR)
     ? DATA_DIR
-    : path.join(base, DATA_DIR);
+    : path.resolve(base, DATA_DIR);
 
   if (username) {
     return path.join(resolvedDataDir, mode, username);

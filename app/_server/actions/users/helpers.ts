@@ -120,15 +120,24 @@ const findUuidInDirectory = async (
   targetUuid: string
 ): Promise<boolean> => {
   try {
-    const { exec } = await import("child_process");
-    const { promisify } = await import("util");
-    const execAsync = promisify(exec);
+    const { spawn } = await import("child_process");
 
-    // Use a direct grep command for performance and reliability
-    const { stdout } = await execAsync(
-      `grep -rl "uuid: ${targetUuid}" "${dir}" --include="*.md" 2>/dev/null || true`
-    );
-    return stdout.trim().length > 0;
+    return new Promise((resolve) => {
+      const grep = spawn("grep", ["-rl", `uuid: ${targetUuid}`, dir, "--include=*.md"]);
+      let output = "";
+
+      grep.stdout.on("data", (data) => {
+        output += data.toString();
+      });
+
+      grep.on("close", () => {
+        resolve(output.trim().length > 0);
+      });
+
+      grep.on("error", () => {
+        resolve(false);
+      });
+    });
   } catch (error) {
     return false;
   }

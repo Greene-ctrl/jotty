@@ -13,8 +13,6 @@ export const updateUserSettings = async (
   try {
     const currentUser = await getCurrentUser();
 
-    // In auto-login mode, getCurrentUser always returns a user.
-    // We only fail if for some reason it's null (e.g. testing or catastrophic failure).
     if (!currentUser) {
       await logUserEvent("user_settings_updated", "unknown", false, { error: "Not authenticated" });
       return { success: false, error: "Not authenticated" };

@@ -56,65 +56,69 @@ export const readNotesRecursively = async (
         })),
       ]);
 
-      statsOut.stdout.split("\n").forEach((line) => {
-        const [p, b, m] = line.split("|");
-        if (p && b && m)
-          statsCache!.set(p, {
-            birthtime: new Date(parseFloat(b) * 1000),
-            mtime: new Date(parseFloat(m) * 1000),
-          });
-      });
+      if (statsOut.stdout) {
+        statsOut.stdout.split("\n").forEach((line) => {
+          const [p, b, m] = line.split("|");
+          if (p && b && m)
+            statsCache!.set(p, {
+              birthtime: new Date(parseFloat(b) * 1000),
+              mtime: new Date(parseFloat(m) * 1000),
+            });
+        });
+      }
 
       const inFrontmatter = new Map<string, boolean>();
 
       let inTagsFile = "";
-      for (const line of metaOut.stdout.split("\n")) {
-        if (!line) continue;
-        const colonIdx = line.indexOf(":");
-        if (colonIdx === -1) continue;
-        const filePath = line.slice(0, colonIdx);
-        const rest = line.slice(colonIdx + 1);
-        if (rest.trim() === "---") {
-          inFrontmatter.set(filePath, !inFrontmatter.get(filePath));
-          continue;
-        }
-        if (!inFrontmatter.get(filePath)) continue;
-        if (/^\s+-\s/.test(rest)) {
-          if (inTagsFile === filePath) {
-            const tag = rest.replace(/^\s+-\s+/, "").trim();
-            if (tag) {
-              if (!metadataCache!.has(filePath))
-                metadataCache!.set(filePath, {});
-              const entry = metadataCache!.get(filePath)!;
-              if (!Array.isArray(entry.tags)) entry.tags = [];
-              (entry.tags as string[]).push(tag);
+      if (metaOut.stdout) {
+        for (const line of metaOut.stdout.split("\n")) {
+          if (!line) continue;
+          const colonIdx = line.indexOf(":");
+          if (colonIdx === -1) continue;
+          const filePath = line.slice(0, colonIdx);
+          const rest = line.slice(colonIdx + 1);
+          if (rest.trim() === "---") {
+            inFrontmatter.set(filePath, !inFrontmatter.get(filePath));
+            continue;
+          }
+          if (!inFrontmatter.get(filePath)) continue;
+          if (/^\s+-\s/.test(rest)) {
+            if (inTagsFile === filePath) {
+              const tag = rest.replace(/^\s+-\s+/, "").trim();
+              if (tag) {
+                if (!metadataCache!.has(filePath))
+                  metadataCache!.set(filePath, {});
+                const entry = metadataCache!.get(filePath)!;
+                if (!Array.isArray(entry.tags)) entry.tags = [];
+                (entry.tags as string[]).push(tag);
+              }
             }
+            continue;
           }
-          continue;
-        }
-        inTagsFile = "";
-        const innerColon = rest.indexOf(":");
-        if (innerColon === -1) continue;
-        const key = rest.slice(0, innerColon);
-        const val = rest.slice(innerColon + 1);
-        if (!metadataCache!.has(filePath)) metadataCache!.set(filePath, {});
-        const entry = metadataCache!.get(filePath)!;
-        if (key === "tags") {
-          const trimmed = val.trim();
-          if (trimmed === "") {
-            entry.tags = [];
-            inTagsFile = filePath;
+          inTagsFile = "";
+          const innerColon = rest.indexOf(":");
+          if (innerColon === -1) continue;
+          const key = rest.slice(0, innerColon);
+          const val = rest.slice(innerColon + 1);
+          if (!metadataCache!.has(filePath)) metadataCache!.set(filePath, {});
+          const entry = metadataCache!.get(filePath)!;
+          if (key === "tags") {
+            const trimmed = val.trim();
+            if (trimmed === "") {
+              entry.tags = [];
+              inTagsFile = filePath;
+            } else {
+              entry.tags = trimmed
+                .replace(/^\[|\]$/g, "")
+                .split(",")
+                .map((t: string) => t.trim())
+                .filter(Boolean);
+            }
+          } else if (key === "encrypted") {
+            entry.encrypted = val.trim() === "true";
           } else {
-            entry.tags = trimmed
-              .replace(/^\[|\]$/g, "")
-              .split(",")
-              .map((t: string) => t.trim())
-              .filter(Boolean);
+            entry[key] = val.trim().replace(/^["']|["']$/g, "");
           }
-        } else if (key === "encrypted") {
-          entry.encrypted = val.trim() === "true";
-        } else {
-          entry[key] = val.trim().replace(/^["']|["']$/g, "");
         }
       }
     } catch (e) {
@@ -123,7 +127,7 @@ export const readNotesRecursively = async (
   }
 
   const notes: Note[] = [];
-  const entries = await serverReadDir(dir);
+  const entries = (await serverReadDir(dir)) || [];
   let excludedDirs = EXCLUDED_DIRS;
 
   if (!allowArchived) {
@@ -144,39 +148,22 @@ export const readNotesRecursively = async (
       ]
     : dirNames.sort((a, b) => a.localeCompare(b));
 
-  const subDirPromises = orderedDirNames.map(async (dirName) => {
-    return readNotesRecursively(
-      path.join(dir, dirName),
-      basePath ? `${basePath}/${dirName}` : dirName,
-      owner,
-      allowArchived,
-      isRaw,
-      metadataOnly,
-      excerptLength,
-      metadataCache,
-      statsCache,
-    );
-  });
-
-  const categoryDir = dir;
-  const categoryPath = basePath;
-  const files = entries;
-  const mdFiles = files.filter((f) => f.isFile() && f.name.endsWith(".md"));
+  const mdFiles = entries.filter((f) => f.isFile() && f.name.endsWith(".md"));
   const ids = mdFiles.map((f) => path.basename(f.name, ".md"));
-  const categoryOrder = order;
 
-  const orderedIds: string[] = categoryOrder?.items
+  const orderedIds: string[] = order?.items
     ? [
-        ...categoryOrder.items.filter((id) => ids.includes(id)),
+        ...order.items.filter((id) => ids.includes(id)),
         ...ids
-          .filter((id) => !categoryOrder.items!.includes(id))
+          .filter((id) => !order.items!.includes(id))
           .sort((a, b) => a.localeCompare(b)),
       ]
     : ids.sort((a, b) => a.localeCompare(b));
 
+  // Process files in the current directory
   const filePromises = orderedIds.map(async (id) => {
     const fileName = `${id}.md`;
-    const filePath = path.join(categoryDir, fileName);
+    const filePath = path.join(dir, fileName);
     try {
       const cachedStats = statsCache?.get(filePath);
       const stats = cachedStats
@@ -196,7 +183,7 @@ export const readNotesRecursively = async (
           id,
           uuid: typeof metadata?.uuid === "string" ? metadata.uuid : undefined,
           title: typeof metadata?.title === "string" ? metadata.title : id,
-          category: categoryPath,
+          category: basePath,
           createdAt: toIso(stats.birthtime),
           updatedAt: toIso(stats.mtime),
           owner,
@@ -218,7 +205,7 @@ export const readNotesRecursively = async (
           uuid: typeof metadata?.uuid === "string" ? metadata.uuid : undefined,
           title: typeof metadata?.title === "string" ? metadata.title : id,
           content: excerpt,
-          category: categoryPath,
+          category: basePath,
           createdAt: toIso(stats.birthtime),
           updatedAt: toIso(stats.mtime),
           owner,
@@ -240,7 +227,7 @@ export const readNotesRecursively = async (
             uuid,
             title: id,
             content: "",
-            category: categoryPath,
+            category: basePath,
             createdAt: toIso(stats.birthtime),
             updatedAt: toIso(stats.mtime),
             owner,
@@ -251,7 +238,7 @@ export const readNotesRecursively = async (
           return parseMarkdownNote(
             content,
             id,
-            categoryPath,
+            basePath,
             owner,
             false,
             {
@@ -267,13 +254,28 @@ export const readNotesRecursively = async (
     }
   });
 
-  const [subDirNotes, currentDirNotes] = await Promise.all([
-    Promise.all(subDirPromises),
+  // Process subdirectories
+  const subDirPromises = orderedDirNames.map(async (dirName) => {
+    return readNotesRecursively(
+      path.join(dir, dirName),
+      basePath ? `${basePath}/${dirName}` : dirName,
+      owner,
+      allowArchived,
+      isRaw,
+      metadataOnly,
+      excerptLength,
+      metadataCache,
+      statsCache,
+    );
+  });
+
+  const [currentDirNotes, subDirNotes] = await Promise.all([
     Promise.all(filePromises),
+    Promise.all(subDirPromises),
   ]);
 
-  notes.push(...currentDirNotes.filter((n): n is Note => n != null));
-  subDirNotes.forEach((sub) => notes.push(...sub));
+  const allNotes = currentDirNotes.filter((n): n is Note => n != null);
+  subDirNotes.forEach((sub) => allNotes.push(...sub));
 
-  return notes;
+  return allNotes;
 };
